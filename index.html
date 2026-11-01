@@ -8,9 +8,22 @@
 </head>
 <body class="bg-gray-50 p-4 max-w-md mx-auto text-gray-800 font-sans min-h-screen flex flex-col">
 
+  <!-- API Key Modal (Shows only if key is missing) -->
+  <div id="key-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+      <h2 class="text-base font-bold mb-1">Set Gemini API Key</h2>
+      <p class="text-xs text-gray-500 mb-3">Saved locally on your device. Never committed to GitHub.</p>
+      <input id="modal-key-input" type="password" placeholder="AIzaSy..." class="w-full border border-gray-300 rounded-lg p-2.5 text-xs mb-3 font-mono focus:outline-blue-500" />
+      <button id="modal-save-btn" class="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold text-xs active:scale-95 transition">Save Key</button>
+    </div>
+  </div>
+
   <!-- Header -->
   <header class="mb-4 text-center">
-    <h1 class="text-xl font-bold">Smart Cafe Nutrition Tracker</h1>
+    <div class="flex justify-between items-center mb-1">
+      <h1 class="text-xl font-bold">Smart Cafe Tracker</h1>
+      <button id="change-key-btn" class="text-[11px] text-blue-600 bg-blue-50 px-2 py-1 rounded font-medium">⚙️ Key</button>
+    </div>
     <p class="text-xs text-gray-500">Session ID: <span id="user-tag" class="font-mono text-gray-700 font-semibold"></span></p>
   </header>
 
@@ -30,16 +43,14 @@
     </div>
   </div>
 
-  <!-- Dual Action Buttons: Snap & Upload -->
+  <!-- Dual Action Buttons -->
   <div class="grid grid-cols-2 gap-2 mb-2">
-    <!-- Live Camera Snap -->
     <label class="flex flex-col items-center justify-center p-3 bg-blue-600 text-white font-medium text-xs rounded-xl shadow cursor-pointer active:scale-95 transition">
       <span class="text-base mb-1">📷</span>
       <span>Snap Live Pic</span>
       <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" />
     </label>
 
-    <!-- Gallery Upload -->
     <label class="flex flex-col items-center justify-center p-3 bg-gray-800 text-white font-medium text-xs rounded-xl shadow cursor-pointer active:scale-95 transition">
       <span class="text-base mb-1">🖼️</span>
       <span>Upload from Gallery</span>
@@ -47,20 +58,19 @@
     </label>
   </div>
 
-  <!-- Live Status Text -->
   <div id="status" class="text-xs text-center font-medium text-gray-600 my-2 min-h-[1rem]"></div>
 
   <!-- Meal History -->
   <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mt-4 mb-2">Meal History</h2>
   <ul id="meals-list" class="space-y-2 flex-1 overflow-y-auto"></ul>
 
-  <!-- Firebase & App Logic -->
+  <!-- Firebase & App Script -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } 
       from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    const GEMINI_API_KEY = "AIzaSyB8qgjhkqSnTc8W8gHHacRjPLOJ4Apus2A";
+    // Public Firebase Client Config (Safe in client code)
     const firebaseConfig = {
       apiKey: "AIzaSyDfeSo-o4q4JzHCoQeIMhWWEp0w3bOBtqY",
       authDomain: "foodcal-13296.firebaseapp.com",
@@ -74,7 +84,31 @@
     const db = getFirestore(app);
     const mealsCol = collection(db, "cafe_sessions");
 
-    // Persistent User Session
+    // Secure Local Storage Key Management
+    const keyModal = document.getElementById("key-modal");
+    const keyInput = document.getElementById("modal-key-input");
+    
+    function getGeminiKey() {
+      return localStorage.getItem("cafe_gemini_key");
+    }
+
+    if (!getGeminiKey()) {
+      keyModal.classList.remove("hidden");
+    }
+
+    document.getElementById("modal-save-btn").onclick = () => {
+      const val = keyInput.value.trim();
+      if (!val) return alert("Please enter a valid key");
+      localStorage.setItem("cafe_gemini_key", val);
+      keyModal.classList.add("hidden");
+    };
+
+    document.getElementById("change-key-btn").onclick = () => {
+      keyInput.value = getGeminiKey() || "";
+      keyModal.classList.remove("hidden");
+    };
+
+    // User session
     let userId = localStorage.getItem("cafe_user_id");
     if (!userId) {
       userId = "user_" + Math.random().toString(36).substring(2, 8);
@@ -84,8 +118,12 @@
 
     const statusText = document.getElementById("status");
 
-    // Unified Image Handler (Camera + Gallery)
     async function processSelectedFile(file) {
+      const apiKey = getGeminiKey();
+      if (!apiKey) {
+        keyModal.classList.remove("hidden");
+        return;
+      }
       if (!file) return;
 
       statusText.className = "text-xs text-center font-medium text-blue-600 my-2";
@@ -93,7 +131,7 @@
 
       try {
         const { base64, mimeType } = await toBase64(file);
-        const nutritionData = await analyzeFood(base64, mimeType);
+        const nutritionData = await analyzeFood(base64, mimeType, apiKey);
 
         await addDoc(mealsCol, {
           userId,
@@ -132,20 +170,12 @@
       });
     }
 
-    // Direct Gemini 3.6 Flash call (No fallbacks)
-    async function analyzeFood(base64Image, mimeType) {
-      const prompt = `Identify all food items on plate, estimate quantities/portions, and calculate totals.
-Return ONLY raw JSON conforming to this schema:
-{
-  "summary": "Item names and approximate portions",
-  "calories": number,
-  "carbs_g": number,
-  "protein_g": number,
-  "fat_g": number
-}`;
+    async function analyzeFood(base64Image, mimeType, apiKey) {
+      const prompt = `Identify food items and portions. Return ONLY JSON conforming to:
+{"summary": string, "calories": number, "carbs_g": number, "protein_g": number, "fat_g": number}`;
 
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -162,19 +192,15 @@ Return ONLY raw JSON conforming to this schema:
       );
 
       const json = await res.json();
-
-      if (json.error) {
-        throw new Error(`Gemini: ${json.error.message}`);
-      }
-
-      if (!json.candidates || !json.candidates[0]?.content?.parts?.[0]?.text) {
-        throw new Error("No response. Content may have triggered safety filtering.");
+      if (json.error) throw new Error(json.error.message);
+      if (!json.candidates?.[0]?.content?.parts?.[0]?.text) {
+        throw new Error("No response generated. Possible safety filter trigger.");
       }
 
       return JSON.parse(json.candidates[0].content.parts[0].text);
     }
 
-    // Real-time Firestore Sync
+    // Real-time Dashboard Sync
     onSnapshot(query(mealsCol, orderBy("timestamp", "desc")), (snapshot) => {
       const list = document.getElementById("meals-list");
       list.innerHTML = "";
