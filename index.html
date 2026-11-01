@@ -32,14 +32,14 @@
 
   <!-- Dual Action Buttons: Snap & Upload -->
   <div class="grid grid-cols-2 gap-2 mb-2">
-    <!-- 1. Live Camera Snap -->
+    <!-- Live Camera Snap -->
     <label class="flex flex-col items-center justify-center p-3 bg-blue-600 text-white font-medium text-xs rounded-xl shadow cursor-pointer active:scale-95 transition">
       <span class="text-base mb-1">📷</span>
       <span>Snap Live Pic</span>
       <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" />
     </label>
 
-    <!-- 2. Gallery Upload -->
+    <!-- Gallery Upload -->
     <label class="flex flex-col items-center justify-center p-3 bg-gray-800 text-white font-medium text-xs rounded-xl shadow cursor-pointer active:scale-95 transition">
       <span class="text-base mb-1">🖼️</span>
       <span>Upload from Gallery</span>
@@ -60,7 +60,6 @@
     import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } 
       from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // Embedded Credentials
     const GEMINI_API_KEY = "AIzaSyB8qgjhkqSnTc8W8gHHacRjPLOJ4Apus2A";
     const firebaseConfig = {
       apiKey: "AIzaSyDfeSo-o4q4JzHCoQeIMhWWEp0w3bOBtqY",
@@ -90,7 +89,7 @@
       if (!file) return;
 
       statusText.className = "text-xs text-center font-medium text-blue-600 my-2";
-      statusText.innerText = "Analyzing meal with Gemini...";
+      statusText.innerText = "Analyzing meal with Gemini 3.6 Flash...";
 
       try {
         const { base64, mimeType } = await toBase64(file);
@@ -112,12 +111,12 @@
 
     document.getElementById("camera-input").addEventListener("change", (e) => {
       processSelectedFile(e.target.files[0]);
-      e.target.value = ""; // Reset input so same picture can be re-tested
+      e.target.value = "";
     });
 
     document.getElementById("gallery-input").addEventListener("change", (e) => {
       processSelectedFile(e.target.files[0]);
-      e.target.value = ""; // Reset input
+      e.target.value = "";
     });
 
     function toBase64(file) {
@@ -133,6 +132,7 @@
       });
     }
 
+    // Direct Gemini 3.6 Flash call (No fallbacks)
     async function analyzeFood(base64Image, mimeType) {
       const prompt = `Identify all food items on plate, estimate quantities/portions, and calculate totals.
 Return ONLY raw JSON conforming to this schema:
@@ -145,7 +145,7 @@ Return ONLY raw JSON conforming to this schema:
 }`;
 
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${GEMINI_API_KEY}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -163,13 +163,12 @@ Return ONLY raw JSON conforming to this schema:
 
       const json = await res.json();
 
-      // Explicit error check to avoid undefined '0' crashes
       if (json.error) {
         throw new Error(`Gemini: ${json.error.message}`);
       }
 
-      if (!json.candidates || !json.candidates[0]?.content?.parts?.[0]) {
-        throw new Error("No response. Content may have triggered a safety block.");
+      if (!json.candidates || !json.candidates[0]?.content?.parts?.[0]?.text) {
+        throw new Error("No response. Content may have triggered safety filtering.");
       }
 
       return JSON.parse(json.candidates[0].content.parts[0].text);
