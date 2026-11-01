@@ -3,74 +3,106 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Cafe Tracker</title>
+  <title>Smart Cafe Nutrition Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-50 p-4 max-w-md mx-auto text-gray-800 font-sans min-h-screen flex flex-col">
+<body class="bg-gray-100 p-3 max-w-md mx-auto text-gray-800 font-sans min-h-screen flex flex-col pb-12">
 
-  <!-- API Key Modal (Shows only if key is missing) -->
-  <div id="key-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <!-- API Key Setup Modal -->
+  <div id="key-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
     <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
       <h2 class="text-base font-bold mb-1">Set Gemini API Key</h2>
-      <p class="text-xs text-gray-500 mb-3">Saved locally on your device. Never committed to GitHub.</p>
+      <p class="text-xs text-gray-500 mb-3">Saved locally in your browser. Never committed to Git.</p>
       <input id="modal-key-input" type="password" placeholder="AIzaSy..." class="w-full border border-gray-300 rounded-lg p-2.5 text-xs mb-3 font-mono focus:outline-blue-500" />
       <button id="modal-save-btn" class="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold text-xs active:scale-95 transition">Save Key</button>
     </div>
   </div>
 
-  <!-- Header -->
-  <header class="mb-4 text-center">
-    <div class="flex justify-between items-center mb-1">
-      <h1 class="text-xl font-bold">Smart Cafe Tracker</h1>
-      <button id="change-key-btn" class="text-[11px] text-blue-600 bg-blue-50 px-2 py-1 rounded font-medium">⚙️ Key</button>
+  <!-- AI Correction / Edit Modal -->
+  <div id="edit-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-xl">
+      <div class="flex justify-between items-center mb-2">
+        <h2 class="text-sm font-bold">Fix / Adjust with Gemini</h2>
+        <button id="close-edit-btn" class="text-gray-400 text-lg">&times;</button>
+      </div>
+      <p class="text-xs text-gray-500 mb-3">Tell Gemini what to correct (e.g. <i>"It's a chicken burger, not bacon"</i> or <i>"Portion was large"</i>):</p>
+      <textarea id="edit-prompt-input" rows="3" class="w-full border border-gray-300 rounded-lg p-2 text-xs mb-3 focus:outline-blue-500" placeholder="Describe the correction..."></textarea>
+      <button id="submit-edit-btn" class="w-full py-2.5 bg-indigo-600 text-white rounded-lg font-semibold text-xs active:scale-95 transition">Ask Gemini to Re-evaluate</button>
     </div>
-    <p class="text-xs text-gray-500">Session ID: <span id="user-tag" class="font-mono text-gray-700 font-semibold"></span></p>
+  </div>
+
+  <!-- Header -->
+  <header class="mb-3 text-center">
+    <div class="flex justify-between items-center mb-1">
+      <h1 class="text-lg font-bold tracking-tight">Smart Cafe Tracker</h1>
+      <button id="change-key-btn" class="text-[11px] text-blue-600 bg-white border border-blue-200 px-2 py-1 rounded-md font-medium shadow-sm">⚙️ Key</button>
+    </div>
+    <p class="text-[11px] text-gray-500">Session ID: <span id="user-tag" class="font-mono text-gray-700 font-semibold"></span></p>
   </header>
 
-  <!-- Macro Totals Card -->
-  <div class="grid grid-cols-3 gap-2 text-center bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-4">
+  <!-- Total Session Summary -->
+  <div class="grid grid-cols-4 gap-1.5 text-center bg-white p-3 rounded-2xl shadow-sm border border-gray-200 mb-3">
     <div>
-      <div class="text-[11px] font-medium text-gray-400">Calories</div>
-      <div id="total-calories" class="text-lg font-bold text-blue-600">0</div>
+      <div class="text-[10px] text-gray-400 uppercase font-semibold">Calories</div>
+      <div id="total-calories" class="text-base font-bold text-blue-600">0</div>
     </div>
     <div>
-      <div class="text-[11px] font-medium text-gray-400">Carbs</div>
-      <div id="total-carbs" class="text-lg font-bold text-amber-600">0g</div>
+      <div class="text-[10px] text-gray-400 uppercase font-semibold">Carbs</div>
+      <div id="total-carbs" class="text-base font-bold text-amber-600">0g</div>
     </div>
     <div>
-      <div class="text-[11px] font-medium text-gray-400">Protein</div>
-      <div id="total-protein" class="text-lg font-bold text-emerald-600">0g</div>
+      <div class="text-[10px] text-gray-400 uppercase font-semibold">Protein</div>
+      <div id="total-protein" class="text-base font-bold text-emerald-600">0g</div>
+    </div>
+    <div>
+      <div class="text-[10px] text-gray-400 uppercase font-semibold">Fat</div>
+      <div id="total-fat" class="text-base font-bold text-purple-600">0g</div>
     </div>
   </div>
 
-  <!-- Dual Action Buttons -->
-  <div class="grid grid-cols-2 gap-2 mb-2">
-    <label class="flex flex-col items-center justify-center p-3 bg-blue-600 text-white font-medium text-xs rounded-xl shadow cursor-pointer active:scale-95 transition">
-      <span class="text-base mb-1">📷</span>
-      <span>Snap Live Pic</span>
-      <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" />
-    </label>
+  <!-- Meal Date/Time Selector for new snap -->
+  <div class="bg-white p-3 rounded-2xl shadow-sm border border-gray-200 mb-3">
+    <label class="block text-[11px] font-semibold text-gray-500 mb-1">Meal Date & Time</label>
+    <input id="meal-datetime-input" type="datetime-local" class="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs font-medium focus:outline-blue-500 mb-3" />
 
-    <label class="flex flex-col items-center justify-center p-3 bg-gray-800 text-white font-medium text-xs rounded-xl shadow cursor-pointer active:scale-95 transition">
-      <span class="text-base mb-1">🖼️</span>
-      <span>Upload from Gallery</span>
-      <input id="gallery-input" type="file" accept="image/*" class="hidden" />
-    </label>
+    <!-- Action Buttons -->
+    <div class="grid grid-cols-2 gap-2">
+      <label class="flex items-center justify-center gap-1.5 p-3 bg-blue-600 text-white font-medium text-xs rounded-xl shadow cursor-pointer active:scale-95 transition">
+        <span>📷</span>
+        <span>Snap Live Pic</span>
+        <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" />
+      </label>
+
+      <label class="flex items-center justify-center gap-1.5 p-3 bg-gray-800 text-white font-medium text-xs rounded-xl shadow cursor-pointer active:scale-95 transition">
+        <span>🖼️</span>
+        <span>Upload Pic</span>
+        <input id="gallery-input" type="file" accept="image/*" class="hidden" />
+      </label>
+    </div>
   </div>
 
-  <div id="status" class="text-xs text-center font-medium text-gray-600 my-2 min-h-[1rem]"></div>
+  <!-- Live Processing Preview Card -->
+  <div id="preview-box" class="hidden bg-white p-3 rounded-2xl shadow-sm border border-blue-200 mb-3 text-center">
+    <img id="live-thumbnail" class="w-full h-48 object-cover rounded-xl mb-2 shadow" alt="Food preview" />
+    <div id="status-spinner" class="inline-block animate-spin text-blue-600 text-lg mr-1">⏳</div>
+    <span id="status-text" class="text-xs font-semibold text-blue-600">Analyzing meal with Gemini 3.6 Flash...</span>
+  </div>
 
   <!-- Meal History -->
-  <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mt-4 mb-2">Meal History</h2>
-  <ul id="meals-list" class="space-y-2 flex-1 overflow-y-auto"></ul>
+  <div class="flex justify-between items-center mb-2 mt-1">
+    <h2 class="text-xs font-bold text-gray-500 uppercase tracking-wider">Logged Meals</h2>
+    <span id="meal-count" class="text-[11px] text-gray-400 font-medium">0 entries</span>
+  </div>
 
-  <!-- Firebase & App Script -->
+  <div id="meals-list" class="space-y-3 flex-1"></div>
+
+  <!-- Script logic -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } 
-      from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { 
+      getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot 
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // Public Firebase Client Config (Safe in client code)
     const firebaseConfig = {
       apiKey: "AIzaSyDfeSo-o4q4JzHCoQeIMhWWEp0w3bOBtqY",
       authDomain: "foodcal-13296.firebaseapp.com",
@@ -84,21 +116,21 @@
     const db = getFirestore(app);
     const mealsCol = collection(db, "cafe_sessions");
 
-    // Secure Local Storage Key Management
+    // Initialize DateTime Picker to Now
+    const dtInput = document.getElementById("meal-datetime-input");
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    dtInput.value = now.toISOString().slice(0, 16);
+
+    // API Key logic
     const keyModal = document.getElementById("key-modal");
     const keyInput = document.getElementById("modal-key-input");
-    
-    function getGeminiKey() {
-      return localStorage.getItem("cafe_gemini_key");
-    }
-
-    if (!getGeminiKey()) {
-      keyModal.classList.remove("hidden");
-    }
+    function getGeminiKey() { return localStorage.getItem("cafe_gemini_key"); }
+    if (!getGeminiKey()) keyModal.classList.remove("hidden");
 
     document.getElementById("modal-save-btn").onclick = () => {
       const val = keyInput.value.trim();
-      if (!val) return alert("Please enter a valid key");
+      if (!val) return alert("Please enter key");
       localStorage.setItem("cafe_gemini_key", val);
       keyModal.classList.add("hidden");
     };
@@ -116,63 +148,54 @@
     }
     document.getElementById("user-tag").innerText = userId;
 
-    const statusText = document.getElementById("status");
-
-    async function processSelectedFile(file) {
-      const apiKey = getGeminiKey();
-      if (!apiKey) {
-        keyModal.classList.remove("hidden");
-        return;
-      }
-      if (!file) return;
-
-      statusText.className = "text-xs text-center font-medium text-blue-600 my-2";
-      statusText.innerText = "Analyzing meal with Gemini 3.6 Flash...";
-
-      try {
-        const { base64, mimeType } = await toBase64(file);
-        const nutritionData = await analyzeFood(base64, mimeType, apiKey);
-
-        await addDoc(mealsCol, {
-          userId,
-          timestamp: Date.now(),
-          ...nutritionData
-        });
-
-        statusText.className = "text-xs text-center font-medium text-emerald-600 my-2";
-        statusText.innerText = "Logged: " + nutritionData.summary;
-      } catch (err) {
-        statusText.className = "text-xs text-center font-medium text-red-600 my-2";
-        statusText.innerText = "Error: " + err.message;
-      }
-    }
-
-    document.getElementById("camera-input").addEventListener("change", (e) => {
-      processSelectedFile(e.target.files[0]);
-      e.target.value = "";
-    });
-
-    document.getElementById("gallery-input").addEventListener("change", (e) => {
-      processSelectedFile(e.target.files[0]);
-      e.target.value = "";
-    });
-
-    function toBase64(file) {
+    // Canvas Downsampling (Compacts large phone photos to safe ~30-50KB for Firestore)
+    function processImageFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => {
-          const parts = reader.result.split(",");
-          const mimeType = parts[0].match(/:(.*?);/)[1] || "image/jpeg";
-          resolve({ base64: parts[1], mimeType });
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const maxDim = 540;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height && width > maxDim) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else if (height > maxDim) {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+
+            const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.65);
+            const base64 = compressedDataUrl.split(",")[1];
+            resolve({ base64, dataUrl: compressedDataUrl, mimeType: "image/jpeg" });
+          };
+          img.onerror = reject;
+          img.src = e.target.result;
         };
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
     }
 
-    async function analyzeFood(base64Image, mimeType, apiKey) {
-      const prompt = `Identify food items and portions. Return ONLY JSON conforming to:
-{"summary": string, "calories": number, "carbs_g": number, "protein_g": number, "fat_g": number}`;
+    // Call Gemini 3.6 Flash
+    async function askGemini(promptText, base64Image, mimeType) {
+      const apiKey = getGeminiKey();
+      if (!apiKey) throw new Error("API Key missing");
+
+      const contents = [{
+        parts: [
+          { text: promptText },
+          { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Image } }
+        ]
+      }];
 
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
@@ -180,12 +203,7 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contents: [{
-              parts: [
-                { text: prompt },
-                { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Image } }
-              ]
-            }],
+            contents,
             generationConfig: { responseMimeType: "application/json" }
           })
         }
@@ -194,46 +212,287 @@
       const json = await res.json();
       if (json.error) throw new Error(json.error.message);
       if (!json.candidates?.[0]?.content?.parts?.[0]?.text) {
-        throw new Error("No response generated. Possible safety filter trigger.");
+        throw new Error("No response generated.");
       }
-
       return JSON.parse(json.candidates[0].content.parts[0].text);
     }
 
-    // Real-time Dashboard Sync
+    // Handle Image Upload
+    async function handleSelectedFile(file) {
+      if (!file) return;
+      if (!getGeminiKey()) return keyModal.classList.remove("hidden");
+
+      const previewBox = document.getElementById("preview-box");
+      const liveThumbnail = document.getElementById("live-thumbnail");
+      const statusText = document.getElementById("status-text");
+      const statusSpinner = document.getElementById("status-spinner");
+
+      try {
+        const { base64, dataUrl, mimeType } = await processImageFile(file);
+
+        // Show large preview instantly
+        liveThumbnail.src = dataUrl;
+        previewBox.classList.remove("hidden");
+        statusSpinner.classList.remove("hidden");
+        statusText.innerText = "Analyzing meal with Gemini 3.6 Flash...";
+        previewBox.scrollIntoView({ behavior: "smooth" });
+
+        const prompt = `Identify each food item in the image with its portion.
+Return ONLY raw JSON conforming to this schema:
+{
+  "summary": "Overall meal name",
+  "items": [
+    {
+      "name": "Food item name",
+      "portion": "e.g. 1 bowl / 1 sandwich / 150g",
+      "quantity": 1,
+      "unit_calories": number,
+      "unit_carbs_g": number,
+      "unit_protein_g": number,
+      "unit_fat_g": number
+    }
+  ]
+}`;
+
+        const parsed = await askGemini(prompt, base64, mimeType);
+
+        const chosenTime = dtInput.value ? new Date(dtInput.value).getTime() : Date.now();
+
+        await addDoc(mealsCol, {
+          userId,
+          timestamp: chosenTime,
+          summary: parsed.summary || "Meal",
+          thumbnail: dataUrl,
+          items: parsed.items || []
+        });
+
+        previewBox.classList.add("hidden");
+      } catch (err) {
+        statusSpinner.classList.add("hidden");
+        statusText.innerText = "Error: " + err.message;
+        alert("Error: " + err.message);
+      }
+    }
+
+    document.getElementById("camera-input").addEventListener("change", (e) => {
+      handleSelectedFile(e.target.files[0]);
+      e.target.value = "";
+    });
+
+    document.getElementById("gallery-input").addEventListener("change", (e) => {
+      handleSelectedFile(e.target.files[0]);
+      e.target.value = "";
+    });
+
+    // Edit Modal & Gemini Correction Handlers
+    let currentEditDocId = null;
+    let currentEditDocData = null;
+    const editModal = document.getElementById("edit-modal");
+    const editPromptInput = document.getElementById("edit-prompt-input");
+
+    window.openEditPrompt = (docId) => {
+      currentEditDocId = docId;
+      currentEditDocData = cachedDocs[docId];
+      editPromptInput.value = "";
+      editModal.classList.remove("hidden");
+    };
+
+    document.getElementById("close-edit-btn").onclick = () => editModal.classList.add("hidden");
+
+    document.getElementById("submit-edit-btn").onclick = async () => {
+      const userFix = editPromptInput.value.trim();
+      if (!userFix) return alert("Please describe what to fix");
+
+      const submitBtn = document.getElementById("submit-edit-btn");
+      submitBtn.innerText = "Gemini is recalculating...";
+      submitBtn.disabled = true;
+
+      try {
+        const base64 = currentEditDocData.thumbnail.split(",")[1];
+        const fixPrompt = `You previously analyzed this image as: ${JSON.stringify(currentEditDocData.items)}.
+The user has this correction: "${userFix}".
+Re-identify and adjust the items. Return ONLY JSON conforming to:
+{
+  "summary": "Updated meal summary",
+  "items": [
+    {
+      "name": "Corrected item name",
+      "portion": "portion description",
+      "quantity": 1,
+      "unit_calories": number,
+      "unit_carbs_g": number,
+      "unit_protein_g": number,
+      "unit_fat_g": number
+    }
+  ]
+}`;
+
+        const updated = await askGemini(fixPrompt, base64, "image/jpeg");
+
+        await updateDoc(doc(db, "cafe_sessions", currentEditDocId), {
+          summary: updated.summary,
+          items: updated.items
+        });
+
+        editModal.classList.add("hidden");
+      } catch (err) {
+        alert("Correction failed: " + err.message);
+      } finally {
+        submitBtn.innerText = "Ask Gemini to Re-evaluate";
+        submitBtn.disabled = false;
+      }
+    };
+
+    // Item Quantity Adjustments (+ / -)
+    window.adjustQty = async (docId, itemIndex, delta) => {
+      const meal = cachedDocs[docId];
+      if (!meal || !meal.items[itemIndex]) return;
+
+      const items = [...meal.items];
+      const newQty = (items[itemIndex].quantity || 1) + delta;
+
+      if (newQty <= 0) {
+        if (confirm(`Remove ${items[itemIndex].name}?`)) {
+          items.splice(itemIndex, 1);
+        } else {
+          return;
+        }
+      } else {
+        items[itemIndex].quantity = newQty;
+      }
+
+      await updateDoc(doc(db, "cafe_sessions", docId), { items });
+    };
+
+    // Update Date/Time directly on existing record
+    window.updateRecordDate = async (docId, newIsoString) => {
+      if (!newIsoString) return;
+      const newTimestamp = new Date(newIsoString).getTime();
+      await updateDoc(doc(db, "cafe_sessions", docId), { timestamp: newTimestamp });
+    };
+
+    // Delete Record
+    window.deleteRecord = async (docId) => {
+      if (confirm("Delete this entire meal record?")) {
+        await deleteDoc(doc(db, "cafe_sessions", docId));
+      }
+    };
+
+    // Real-Time Rendering Engine
+    let cachedDocs = {};
+
     onSnapshot(query(mealsCol, orderBy("timestamp", "desc")), (snapshot) => {
       const list = document.getElementById("meals-list");
       list.innerHTML = "";
-      let tCal = 0, tCarbs = 0, tProt = 0;
 
-      snapshot.forEach((doc) => {
-        const d = doc.data();
+      let totalSessionCal = 0;
+      let totalSessionCarb = 0;
+      let totalSessionProt = 0;
+      let totalSessionFat = 0;
+      let count = 0;
+
+      cachedDocs = {};
+
+      snapshot.forEach((docSnap) => {
+        const d = docSnap.data();
         if (d.userId !== userId) return;
 
-        tCal += Number(d.calories) || 0;
-        tCarbs += Number(d.carbs_g) || 0;
-        tProt += Number(d.protein_g) || 0;
+        const docId = docSnap.id;
+        cachedDocs[docId] = d;
+        count++;
 
-        const timeStr = new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        // Compute Parent Totals dynamically from child items
+        let mealCal = 0, mealCarb = 0, mealProt = 0, mealFat = 0;
+        const items = d.items || [];
 
+        items.forEach((item) => {
+          const qty = item.quantity || 1;
+          mealCal += (Number(item.unit_calories) || 0) * qty;
+          mealCarb += (Number(item.unit_carbs_g) || 0) * qty;
+          mealProt += (Number(item.unit_protein_g) || 0) * qty;
+          mealFat += (Number(item.unit_fat_g) || 0) * qty;
+        });
+
+        totalSessionCal += mealCal;
+        totalSessionCarb += mealCarb;
+        totalSessionProt += mealProt;
+        totalSessionFat += mealFat;
+
+        // Date input formatted value
+        const dateObj = new Date(d.timestamp);
+        const localDateStr = new Date(dateObj.getTime() - dateObj.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+        // Child Items HTML
+        const childItemsHtml = items.map((item, idx) => {
+          const qty = item.quantity || 1;
+          const iCal = Math.round((Number(item.unit_calories) || 0) * qty);
+          const iCarb = Math.round((Number(item.unit_carbs_g) || 0) * qty);
+          const iProt = Math.round((Number(item.unit_protein_g) || 0) * qty);
+          const iFat = Math.round((Number(item.unit_fat_g) || 0) * qty);
+
+          return `
+            <div class="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100 text-xs">
+              <div class="flex-1 pr-2">
+                <div class="font-bold text-gray-800">${item.name}</div>
+                <div class="text-[10px] text-gray-400 font-medium">${item.portion || ''} &bull; ${iCal} kcal (${iCarb}C | ${iProt}P | ${iFat}F)</div>
+              </div>
+              <!-- Quantity Controls -->
+              <div class="flex items-center gap-1.5 bg-white border border-gray-200 px-2 py-1 rounded-lg shadow-sm">
+                <button onclick="window.adjustQty('${docId}', ${idx}, -1)" class="text-xs font-bold text-gray-500 hover:text-red-600 px-1 active:scale-90 transition">-</button>
+                <span class="text-xs font-bold text-gray-800 w-4 text-center">${qty}</span>
+                <button onclick="window.adjustQty('${docId}', ${idx}, 1)" class="text-xs font-bold text-gray-500 hover:text-green-600 px-1 active:scale-90 transition">+</button>
+              </div>
+            </div>`;
+        }).join("");
+
+        // Parent Record Card
         list.innerHTML += `
-          <li class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 text-xs">
-            <div class="flex justify-between items-start mb-1">
-              <span class="font-bold text-gray-800">${d.summary}</span>
-              <span class="text-[10px] text-gray-400">${timeStr}</span>
+          <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <!-- Parent Header & Thumbnail -->
+            <div class="flex gap-3 p-3">
+              <img src="${d.thumbnail || ''}" class="w-20 h-20 object-cover rounded-xl border border-gray-100 flex-shrink-0" alt="Meal" />
+              <div class="flex-1 min-w-0 flex flex-col justify-between">
+                <div>
+                  <div class="flex justify-between items-start">
+                    <h3 class="font-bold text-sm text-gray-900 truncate">${d.summary || 'Meal Record'}</h3>
+                    <button onclick="window.deleteRecord('${docId}')" class="text-gray-300 hover:text-red-500 text-xs ml-1">&times;</button>
+                  </div>
+                  <!-- Editable Date/Time Input -->
+                  <input type="datetime-local" value="${localDateStr}" 
+                    onchange="window.updateRecordDate('${docId}', this.value)" 
+                    class="text-[10px] text-gray-500 bg-transparent border-0 p-0 focus:ring-0 cursor-pointer font-medium" />
+                </div>
+
+                <!-- Aggregated Parent Nutrition -->
+                <div class="text-[11px] font-semibold text-gray-600 pt-1 border-t border-gray-100">
+                  <span class="text-blue-600 font-bold">${mealCal} kcal</span> &bull; 
+                  <span class="text-amber-600">${mealCarb}g C</span> &bull; 
+                  <span class="text-emerald-600">${mealProt}g P</span> &bull; 
+                  <span class="text-purple-600">${mealFat}g F</span>
+                </div>
+              </div>
             </div>
-            <div class="text-gray-500">
-              <span class="text-blue-600 font-semibold">${d.calories} kcal</span> | 
-              <span class="text-amber-600 font-semibold">${d.carbs_g}g C</span> | 
-              <span class="text-emerald-600 font-semibold">${d.protein_g}g P</span> | 
-              <span class="text-purple-600 font-semibold">${d.fat_g || 0}g F</span>
+
+            <!-- Child Breakdown -->
+            <div class="px-3 pb-2 space-y-1.5">
+              ${childItemsHtml || '<div class="text-xs text-gray-400 italic">No food items parsed</div>'}
             </div>
-          </li>`;
+
+            <!-- Fix / Edit Button Footer -->
+            <div class="px-3 py-2 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button onclick="window.openEditPrompt('${docId}')" class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800">
+                <span>✏️ Fix with Gemini</span>
+              </button>
+            </div>
+          </div>`;
       });
 
-      document.getElementById("total-calories").innerText = tCal;
-      document.getElementById("total-carbs").innerText = tCarbs + "g";
-      document.getElementById("total-protein").innerText = tProt + "g";
+      // Update Session Totals
+      document.getElementById("meal-count").innerText = `${count} meal${count === 1 ? '' : 's'}`;
+      document.getElementById("total-calories").innerText = totalSessionCal;
+      document.getElementById("total-carbs").innerText = totalSessionCarb + "g";
+      document.getElementById("total-protein").innerText = totalSessionProt + "g";
+      document.getElementById("total-fat").innerText = totalSessionFat + "g";
     });
   </script>
 </body>
