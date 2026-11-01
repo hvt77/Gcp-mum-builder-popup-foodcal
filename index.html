@@ -5,108 +5,177 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Smart Cafe Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Firebase Modular SDK -->
+</head>
+<body class="bg-gray-50 p-4 max-w-md mx-auto text-gray-800 font-sans min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="mb-4 text-center">
+    <h1 class="text-xl font-bold">Smart Cafe Nutrition Tracker</h1>
+    <p class="text-xs text-gray-500">Session ID: <span id="user-tag" class="font-mono text-gray-700 font-semibold"></span></p>
+  </header>
+
+  <!-- Macro Totals Card -->
+  <div class="grid grid-cols-3 gap-2 text-center bg-white p-3 rounded-xl shadow-sm border border-gray-100 mb-4">
+    <div>
+      <div class="text-[11px] font-medium text-gray-400">Calories</div>
+      <div id="total-calories" class="text-lg font-bold text-blue-600">0</div>
+    </div>
+    <div>
+      <div class="text-[11px] font-medium text-gray-400">Carbs</div>
+      <div id="total-carbs" class="text-lg font-bold text-amber-600">0g</div>
+    </div>
+    <div>
+      <div class="text-[11px] font-medium text-gray-400">Protein</div>
+      <div id="total-protein" class="text-lg font-bold text-emerald-600">0g</div>
+    </div>
+  </div>
+
+  <!-- Dual Action Buttons: Snap & Upload -->
+  <div class="grid grid-cols-2 gap-2 mb-2">
+    <!-- 1. Live Camera Snap -->
+    <label class="flex flex-col items-center justify-center p-3 bg-blue-600 text-white font-medium text-xs rounded-xl shadow cursor-pointer active:scale-95 transition">
+      <span class="text-base mb-1">📷</span>
+      <span>Snap Live Pic</span>
+      <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" />
+    </label>
+
+    <!-- 2. Gallery Upload -->
+    <label class="flex flex-col items-center justify-center p-3 bg-gray-800 text-white font-medium text-xs rounded-xl shadow cursor-pointer active:scale-95 transition">
+      <span class="text-base mb-1">🖼️</span>
+      <span>Upload from Gallery</span>
+      <input id="gallery-input" type="file" accept="image/*" class="hidden" />
+    </label>
+  </div>
+
+  <!-- Live Status Text -->
+  <div id="status" class="text-xs text-center font-medium text-gray-600 my-2 min-h-[1rem]"></div>
+
+  <!-- Meal History -->
+  <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mt-4 mb-2">Meal History</h2>
+  <ul id="meals-list" class="space-y-2 flex-1 overflow-y-auto"></ul>
+
+  <!-- Firebase & App Logic -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } 
       from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-    // 1. CONFIG: Replace with your keys
+    // Embedded Credentials
     const GEMINI_API_KEY = "AIzaSyB8qgjhkqSnTc8W8gHHacRjPLOJ4Apus2A";
     const firebaseConfig = {
-  apiKey: "AIzaSyDfeSo-o4q4JzHCoQeIMhWWEp0w3bOBtqY",
-  authDomain: "foodcal-13296.firebaseapp.com",
-  projectId: "foodcal-13296",
-  storageBucket: "foodcal-13296.firebasestorage.app",
-  messagingSenderId: "123077441536",
-  appId: "1:123077441536:web:bfb12f480007c3ecd2c0e5"
-};
+      apiKey: "AIzaSyDfeSo-o4q4JzHCoQeIMhWWEp0w3bOBtqY",
+      authDomain: "foodcal-13296.firebaseapp.com",
+      projectId: "foodcal-13296",
+      storageBucket: "foodcal-13296.firebasestorage.app",
+      messagingSenderId: "123077441536",
+      appId: "1:123077441536:web:bfb12f480007c3ecd2c0e5"
+    };
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const mealsCol = collection(db, "cafe_sessions");
 
-    // Persistent User ID across sessions
+    // Persistent User Session
     let userId = localStorage.getItem("cafe_user_id");
     if (!userId) {
-      userId = "user_" + Math.random().toString(36).substring(2, 9);
+      userId = "user_" + Math.random().toString(36).substring(2, 8);
       localStorage.setItem("cafe_user_id", userId);
     }
     document.getElementById("user-tag").innerText = userId;
 
-    // 2. Camera & Gemini Call
-    const fileInput = document.getElementById("camera-input");
     const statusText = document.getElementById("status");
 
-    fileInput.addEventListener("change", async (e) => {
-      const file = e.target.files[0];
+    // Unified Image Handler (Camera + Gallery)
+    async function processSelectedFile(file) {
       if (!file) return;
 
+      statusText.className = "text-xs text-center font-medium text-blue-600 my-2";
       statusText.innerText = "Analyzing meal with Gemini...";
-      const base64Data = await toBase64(file);
 
       try {
-        const nutritionData = await analyzeFood(base64Data);
+        const { base64, mimeType } = await toBase64(file);
+        const nutritionData = await analyzeFood(base64, mimeType);
+
         await addDoc(mealsCol, {
           userId,
           timestamp: Date.now(),
           ...nutritionData
         });
-        statusText.innerText = "Meal logged successfully!";
+
+        statusText.className = "text-xs text-center font-medium text-emerald-600 my-2";
+        statusText.innerText = "Logged: " + nutritionData.summary;
       } catch (err) {
+        statusText.className = "text-xs text-center font-medium text-red-600 my-2";
         statusText.innerText = "Error: " + err.message;
       }
+    }
+
+    document.getElementById("camera-input").addEventListener("change", (e) => {
+      processSelectedFile(e.target.files[0]);
+      e.target.value = ""; // Reset input so same picture can be re-tested
     });
 
-    const toBase64 = (file) => new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(",")[1]);
-      reader.readAsDataURL(file);
+    document.getElementById("gallery-input").addEventListener("change", (e) => {
+      processSelectedFile(e.target.files[0]);
+      e.target.value = ""; // Reset input
     });
 
-    async function analyzeFood(base64Image) {
-  const prompt = `Identify food items, estimated portions, and calculate totals.
+    function toBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const parts = reader.result.split(",");
+          const mimeType = parts[0].match(/:(.*?);/)[1] || "image/jpeg";
+          resolve({ base64: parts[1], mimeType });
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function analyzeFood(base64Image, mimeType) {
+      const prompt = `Identify all food items on plate, estimate quantities/portions, and calculate totals.
 Return ONLY raw JSON conforming to this schema:
 {
-  "summary": "Item names string",
+  "summary": "Item names and approximate portions",
   "calories": number,
   "carbs_g": number,
   "protein_g": number,
   "fat_g": number
 }`;
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inlineData: { mimeType: "image/jpeg", data: base64Image } }
-          ]
-        }],
-        generationConfig: { responseMimeType: "application/json" }
-      })
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: prompt },
+                { inlineData: { mimeType: mimeType || "image/jpeg", data: base64Image } }
+              ]
+            }],
+            generationConfig: { responseMimeType: "application/json" }
+          })
+        }
+      );
+
+      const json = await res.json();
+
+      // Explicit error check to avoid undefined '0' crashes
+      if (json.error) {
+        throw new Error(`Gemini: ${json.error.message}`);
+      }
+
+      if (!json.candidates || !json.candidates[0]?.content?.parts?.[0]) {
+        throw new Error("No response. Content may have triggered a safety block.");
+      }
+
+      return JSON.parse(json.candidates[0].content.parts[0].text);
     }
-  );
 
-  const json = await res.json();
-
-  // Show the real API error if one occurred
-  if (json.error) {
-    throw new Error(`Gemini API: ${json.error.message}`);
-  }
-
-  if (!json.candidates || !json.candidates[0]?.content?.parts?.[0]) {
-    throw new Error("No response generated. Food might have triggered safety block.");
-  }
-
-  return JSON.parse(json.candidates[0].content.parts[0].text);
-}
-
-    // 3. Real-time Dashboard & Totals
+    // Real-time Firestore Sync
     onSnapshot(query(mealsCol, orderBy("timestamp", "desc")), (snapshot) => {
       const list = document.getElementById("meals-list");
       list.innerHTML = "";
@@ -115,14 +184,25 @@ Return ONLY raw JSON conforming to this schema:
       snapshot.forEach((doc) => {
         const d = doc.data();
         if (d.userId !== userId) return;
-        tCal += d.calories || 0;
-        tCarbs += d.carbs_g || 0;
-        tProt += d.protein_g || 0;
+
+        tCal += Number(d.calories) || 0;
+        tCarbs += Number(d.carbs_g) || 0;
+        tProt += Number(d.protein_g) || 0;
+
+        const timeStr = new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         list.innerHTML += `
-          <li class="bg-gray-100 p-3 rounded mb-2 text-sm flex justify-between">
-            <span><b>${d.summary}</b></span>
-            <span>${d.calories} kcal | ${d.carbs_g}g C | ${d.protein_g}g P</span>
+          <li class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 text-xs">
+            <div class="flex justify-between items-start mb-1">
+              <span class="font-bold text-gray-800">${d.summary}</span>
+              <span class="text-[10px] text-gray-400">${timeStr}</span>
+            </div>
+            <div class="text-gray-500">
+              <span class="text-blue-600 font-semibold">${d.calories} kcal</span> | 
+              <span class="text-amber-600 font-semibold">${d.carbs_g}g C</span> | 
+              <span class="text-emerald-600 font-semibold">${d.protein_g}g P</span> | 
+              <span class="text-purple-600 font-semibold">${d.fat_g || 0}g F</span>
+            </div>
           </li>`;
       });
 
@@ -131,29 +211,5 @@ Return ONLY raw JSON conforming to this schema:
       document.getElementById("total-protein").innerText = tProt + "g";
     });
   </script>
-</head>
-<body class="bg-gray-50 p-4 max-w-md mx-auto text-gray-800 font-sans">
-  <header class="mb-4 text-center">
-    <h1 class="text-xl font-bold">Smart Cafe Nutrition Tracker</h1>
-    <p class="text-xs text-gray-500">Session ID: <span id="user-tag" class="font-mono"></span></p>
-  </header>
-
-  <!-- Macro Totals Card -->
-  <div class="grid grid-cols-3 gap-2 text-center bg-white p-3 rounded-lg shadow mb-4">
-    <div><div class="text-xs text-gray-500">Calories</div><div id="total-calories" class="text-lg font-bold text-blue-600">0</div></div>
-    <div><div class="text-xs text-gray-500">Carbs</div><div id="total-carbs" class="text-lg font-bold text-amber-600">0g</div></div>
-    <div><div class="text-xs text-gray-500">Protein</div><div id="total-protein" class="text-lg font-bold text-emerald-600">0g</div></div>
-  </div>
-
-  <!-- Camera Action -->
-  <label class="block w-full py-3 bg-blue-600 text-white font-semibold text-center rounded-lg shadow cursor-pointer active:scale-95 transition">
-    Snap Food Plate
-    <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden" />
-  </label>
-  <div id="status" class="text-xs text-center text-gray-600 my-2"></div>
-
-  <!-- Meal History -->
-  <h2 class="text-sm font-bold mt-4 mb-2">Meal History</h2>
-  <ul id="meals-list"></ul>
 </body>
 </html>
